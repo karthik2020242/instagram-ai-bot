@@ -7,7 +7,13 @@ client = genai.Client(
 
 response = client.models.generate_content(
     model="gemini-2.5-flash",
-    contents="Generate an Instagram caption about AI tools."
+    contents="""
+Generate:
+1 Instagram caption
+15 hashtags
+
+Topic: AI tools
+"""
 )
 
 print(response.text)
