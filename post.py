@@ -11,8 +11,11 @@ GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 META_ACCESS_TOKEN = os.environ["META_ACCESS_TOKEN"]
 INSTAGRAM_ACCOUNT_ID = os.environ["INSTAGRAM_ACCOUNT_ID"]
 
+print("INSTAGRAM_ACCOUNT_ID:", INSTAGRAM_ACCOUNT_ID)
+print("TOKEN LOADED:", len(META_ACCESS_TOKEN) > 20)
+
 # =========================
-# GEMINI CLIENT
+# GEMINI
 # =========================
 
 client = genai.Client(api_key=GEMINI_API_KEY)
@@ -48,18 +51,16 @@ Requirements:
             time.sleep(30)
 
 # =========================
-# FALLBACK CAPTION
+# FALLBACK
 # =========================
 
 if caption is None:
-    print("Using fallback caption...")
-
     caption = """
-🚀 AI is transforming the future.
+🚀 AI is changing the future.
 
 Discover powerful AI tools that help you learn faster, work smarter, and save time.
 
-Follow for daily AI tips and tools.
+Follow for daily AI tips.
 
 #AI
 #AITools
@@ -70,15 +71,15 @@ Follow for daily AI tips and tools.
 #FutureTech
 #Productivity
 #Automation
-#DigitalMarketing
 #TechTips
-#AICommunity
-#TechNews
-#Startup
+#DigitalMarketing
 #Learning
+#Startup
+#Business
+#Growth
 """
 
-print("\n===== CAPTION =====\n")
+print("\n===== CAPTION =====")
 print(caption)
 
 # =========================
@@ -86,11 +87,12 @@ print(caption)
 # =========================
 
 image_url = (
-    "https://image.pollinations.ai/prompt/"
-    "futuristic%20artificial%20intelligence%20workspace"
+    "https://images.unsplash.com/photo-1485827404703-89b55fcc595e"
+    "?auto=format&fit=crop&w=1200&q=80"
 )
 
-print("\nCreating Instagram media container...")
+print("\nUsing image:")
+print(image_url)
 
 # =========================
 # CREATE MEDIA CONTAINER
@@ -100,6 +102,8 @@ container_url = (
     f"https://graph.facebook.com/v25.0/"
     f"{INSTAGRAM_ACCOUNT_ID}/media"
 )
+
+print("\nCreating Instagram media container...")
 
 container_response = requests.post(
     container_url,
@@ -122,23 +126,25 @@ if "id" not in container_json:
 
 creation_id = container_json["id"]
 
-print(f"Creation ID: {creation_id}")
+print("Creation ID:", creation_id)
 
 # =========================
-# WAIT BEFORE PUBLISH
+# WAIT
 # =========================
 
-print("Waiting 15 seconds before publish...")
+print("Waiting 15 seconds...")
 time.sleep(15)
 
 # =========================
-# PUBLISH POST
+# PUBLISH
 # =========================
 
 publish_url = (
     f"https://graph.facebook.com/v25.0/"
     f"{INSTAGRAM_ACCOUNT_ID}/media_publish"
 )
+
+print("Publishing post...")
 
 publish_response = requests.post(
     publish_url,
