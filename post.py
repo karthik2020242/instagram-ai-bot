@@ -62,9 +62,7 @@ Discover powerful AI tools that help you learn faster, work smarter, and save ti
 
 Follow for daily AI tips.
 
-#AI
-#AITools
-#ArtificialIntelligence
+
 #Technology
 #Innovation
 #MachineLearning
