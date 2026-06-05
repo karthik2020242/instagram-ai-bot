@@ -8,16 +8,24 @@ from google import genai
 # =========================
 
 GEMINI_KEYS = [
-    os.environ["GEMINI_API_KEY"],
-    os.environ["GEMINI_API_KEY_2"],
-    os.environ["GEMINI_API_KEY_3"]
+    os.environ.get("GEMINI_API_KEY_1"),
+    os.environ.get("GEMINI_API_KEY_2"),
+    os.environ.get("GEMINI_API_KEY_3")
 ]
+
+# Remove empty keys
+GEMINI_KEYS = [key for key in GEMINI_KEYS if key]
 
 META_ACCESS_TOKEN = os.environ["META_ACCESS_TOKEN"]
 INSTAGRAM_ACCOUNT_ID = os.environ["INSTAGRAM_ACCOUNT_ID"]
 
 print("INSTAGRAM_ACCOUNT_ID:", INSTAGRAM_ACCOUNT_ID)
 print("TOKEN LOADED:", len(META_ACCESS_TOKEN) > 20)
+
+# Debug (optional)
+print("KEY1:", bool(os.environ.get("GEMINI_API_KEY_1")))
+print("KEY2:", bool(os.environ.get("GEMINI_API_KEY_2")))
+print("KEY3:", bool(os.environ.get("GEMINI_API_KEY_3")))
 
 # =========================
 # GEMINI CONTENT GENERATION
@@ -31,14 +39,15 @@ for key_index, api_key in enumerate(GEMINI_KEYS, start=1):
 
     print(f"\nTrying Gemini API Key {key_index}")
 
-    client = genai.Client(api_key=api_key)
+    try:
+        client = genai.Client(api_key=api_key)
 
-    for attempt in range(3):
+        for attempt in range(3):
 
-        try:
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents="""
+            try:
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents="""
 Create an Instagram post about AI tools.
 
 Requirements:
@@ -46,30 +55,34 @@ Requirements:
 - 15 hashtags
 - Maximum 150 words
 """
-            )
+                )
 
-            caption = response.text
+                caption = response.text
 
-            print(
-                f"Content generated successfully using API Key {key_index}"
-            )
+                print(
+                    f"Content generated successfully using API Key {key_index}"
+                )
 
+                break
+
+            except Exception as e:
+
+                print(
+                    f"API Key {key_index} - Attempt {attempt + 1} failed"
+                )
+
+                print(str(e))
+
+                if attempt < 2:
+                    print("Waiting 30 seconds...")
+                    time.sleep(30)
+
+        if caption:
             break
 
-        except Exception as e:
-
-            print(
-                f"API Key {key_index} - Attempt {attempt + 1} failed"
-            )
-
-            print(str(e))
-
-            if attempt < 2:
-                print("Waiting 30 seconds...")
-                time.sleep(30)
-
-    if caption:
-        break
+    except Exception as e:
+        print(f"Failed to initialize Gemini Client for Key {key_index}")
+        print(str(e))
 
 # =========================
 # FALLBACK CAPTION
