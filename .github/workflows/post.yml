@@ -1,18 +1,13 @@
 name: AutoPost
-
 on:
 schedule:
 - cron: '0 3 * * *'
 workflow_dispatch:
-
 permissions:
 contents: write
-
 jobs:
 post:
 runs-on: ubuntu-latest
-
-```
 steps:
   - uses: actions/checkout@v4
 
@@ -40,4 +35,4 @@ steps:
       git diff --staged --quiet || git commit -m "Update posted news history"
 
       git push
-```
+
