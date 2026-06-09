@@ -1,7 +1,7 @@
 import os
 import time
-import requests
 import feedparser
+import requests
 from google import genai
 
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
@@ -9,26 +9,27 @@ META_ACCESS_TOKEN = os.environ["META_ACCESS_TOKEN"]
 INSTAGRAM_ACCOUNT_ID = os.environ["INSTAGRAM_ACCOUNT_ID"]
 
 RSS_FEEDS = [
-    "https://techcrunch.com/category/artificial-intelligence/feed/",
-    "https://techcrunch.com/category/startups/feed/",
-    "https://www.socialmediatoday.com/feeds/news/",
+    "https://www.123telugu.com/feed",
+    "https://www.gulte.com/feed",
 ]
 
 POSTED_FILE = "posted_news.txt"
 
-def get_posted_links():
+IMAGE_URL = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1200&q=80"
+
+def load_posted():
     try:
         with open(POSTED_FILE, "r", encoding="utf-8") as f:
-            return set(line.strip() for line in f if line.strip())
+            return set(x.strip() for x in f if x.strip())
     except FileNotFoundError:
         return set()
 
-def save_posted_link(link):
+def save_posted(link):
     with open(POSTED_FILE, "a", encoding="utf-8") as f:
         f.write(link + "\\n")
 
-def get_latest_news():
-    posted = get_posted_links()
+def latest_news():
+    posted = load_posted()
 
     for feed_url in RSS_FEEDS:
         try:
@@ -43,95 +44,72 @@ def get_latest_news():
                 return {
                     "title": getattr(item, "title", ""),
                     "summary": getattr(item, "summary", ""),
-                    "link": link,
+                    "link": link
                 }
-
         except Exception as e:
-            print("Feed error:", e)
+            print(e)
 
     return None
 
-news = get_latest_news()
+news = latest_news()
 
 if not news:
-    print("No new news found.")
+    print("No new Tollywood news found.")
     raise SystemExit(0)
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 prompt = f"""
-NEWS TITLE:
+Create an Instagram post about this Tollywood news.
+
+Title:
 {news['title']}
 
-NEWS SUMMARY:
+Summary:
 {news['summary']}
 
-Create an Instagram post.
-
 Requirements:
-- Explain what happened
+- Exciting fan-friendly tone
+- Explain the news
 - Why it matters
-- Motivational tone
-- Easy language
-- CTA
+- Call to action
+- Max 180 words
 - 15 hashtags
-- Maximum 180 words
-- Focus only on this news
 """
 
-caption = None
+response = client.models.generate_content(
+    model="gemini-2.5-flash",
+    contents=prompt
+)
 
-for attempt in range(3):
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt
-        )
-        caption = response.text
-        break
-    except Exception as e:
-        print("Gemini error:", e)
-        time.sleep(20)
+caption = response.text
 
-if not caption:
-    caption = f"🚀 {news['title']}\\n\\nStay updated with technology."
-
-IMAGE_URL = "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=1200&q=80"
-
-container_url = f"https://graph.facebook.com/v25.0/{INSTAGRAM_ACCOUNT_ID}/media"
-
-container_response = requests.post(
-    container_url,
+container = requests.post(
+    f"https://graph.facebook.com/v25.0/{INSTAGRAM_ACCOUNT_ID}/media",
     data={
         "image_url": IMAGE_URL,
         "caption": caption,
         "access_token": META_ACCESS_TOKEN
     }
-)
+).json()
 
-container_json = container_response.json()
+if "id" not in container:
+    raise Exception(str(container))
 
-if "id" not in container_json:
-    raise Exception(container_response.text)
-
-creation_id = container_json["id"]
+creation_id = container["id"]
 
 time.sleep(15)
 
-publish_url = f"https://graph.facebook.com/v25.0/{INSTAGRAM_ACCOUNT_ID}/media_publish"
-
-publish_response = requests.post(
-    publish_url,
+publish = requests.post(
+    f"https://graph.facebook.com/v25.0/{INSTAGRAM_ACCOUNT_ID}/media_publish",
     data={
         "creation_id": creation_id,
         "access_token": META_ACCESS_TOKEN
     }
-)
+).json()
 
-publish_json = publish_response.json()
-
-if "id" in publish_json:
-    save_posted_link(news["link"])
+if "id" in publish:
+    save_posted(news["link"])
     print("SUCCESS")
 else:
-    raise Exception(publish_response.text)
+    raise Exception(str(publish))
