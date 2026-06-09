@@ -32,7 +32,6 @@ f.write(link + "\n")
 def latest_news():
 posted = load_posted()
 
-```
 for feed_url in RSS_FEEDS:
     try:
         feed = feedparser.parse(feed_url)
@@ -56,7 +55,6 @@ for feed_url in RSS_FEEDS:
         print("Feed Error:", e)
 
 return None
-```
 
 news = latest_news()
 
