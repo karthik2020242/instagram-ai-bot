@@ -52,7 +52,7 @@ for feed_url in RSS_FEEDS:
             }
 
     except Exception as e:
-        print("Feed Error:", e)
+        print("Feed Error:", str(e))
 
 return None
 
@@ -88,6 +88,9 @@ Follow for daily Tollywood movie news.
 #Trending
 """
 
+print("Posting:")
+print(news["title"])
+
 container = requests.post(
 f"https://graph.facebook.com/v25.0/{INSTAGRAM_ACCOUNT_ID}/media",
 data={
@@ -104,6 +107,7 @@ raise Exception(str(container))
 
 creation_id = container["id"]
 
+print("Waiting 15 seconds...")
 time.sleep(15)
 
 publish = requests.post(
