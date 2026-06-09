@@ -11,15 +11,10 @@ INSTAGRAM_ACCOUNT_ID = os.environ["INSTAGRAM_ACCOUNT_ID"]
 RSS_FEEDS = [
     "https://techcrunch.com/category/artificial-intelligence/feed/",
     "https://techcrunch.com/category/startups/feed/",
-    "https://www.socialmediatoday.com/feeds/news/"
+    "https://www.socialmediatoday.com/feeds/news/",
 ]
 
 POSTED_FILE = "posted_news.txt"
-
-IMAGE_URL = (
-    "https://images.unsplash.com/photo-1485827404703-89b55fcc595e"
-    "?auto=format&fit=crop&w=1200&q=80"
-)
 
 def get_posted_links():
     try:
@@ -58,24 +53,30 @@ def get_latest_news():
 
 news = get_latest_news()
 
+if not news:
+    print("No new news found.")
+    raise SystemExit(0)
+
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-prompt = "Create a technology Instagram post."
+prompt = f"""
+NEWS TITLE:
+{news['title']}
 
-if news:
-    prompt = f"""
-Latest technology news:
+NEWS SUMMARY:
+{news['summary']}
 
-Title: {news['title']}
+Create an Instagram post.
 
-Summary: {news['summary']}
-
-Create an engaging Instagram post.
-Explain why it matters.
-Add motivation.
-Add CTA.
-Add 15 hashtags.
-Maximum 180 words.
+Requirements:
+- Explain what happened
+- Why it matters
+- Motivational tone
+- Easy language
+- CTA
+- 15 hashtags
+- Maximum 180 words
+- Focus only on this news
 """
 
 caption = None
@@ -89,11 +90,13 @@ for attempt in range(3):
         caption = response.text
         break
     except Exception as e:
-        print(e)
+        print("Gemini error:", e)
         time.sleep(20)
 
 if not caption:
-    caption = "Follow for daily tech insights. #Technology #AI"
+    caption = f"🚀 {news['title']}\\n\\nStay updated with technology."
+
+IMAGE_URL = "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=1200&q=80"
 
 container_url = f"https://graph.facebook.com/v25.0/{INSTAGRAM_ACCOUNT_ID}/media"
 
@@ -127,7 +130,8 @@ publish_response = requests.post(
 
 publish_json = publish_response.json()
 
-if "id" in publish_json and news:
+if "id" in publish_json:
     save_posted_link(news["link"])
-
-print("Done")
+    print("SUCCESS")
+else:
+    raise Exception(publish_response.text)
