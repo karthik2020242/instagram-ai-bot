@@ -17,10 +17,10 @@ RSS_FEEDS = [
 POSTED_FILE = "posted_news.txt"
 
 # బ్యాక్‌గ్రౌండ్ ఇమేజ్ URL
-IMAGE_URL = (
-    "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba"
-    "?auto=format&fit=crop&w=1200&q=80"
-)
+image_url = None
+
+if "media_content" in item:
+    image_url = item.media_content[0]["url"]
 
 
 def load_posted():
