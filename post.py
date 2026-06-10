@@ -11,20 +11,20 @@ INSTAGRAM_ACCOUNT_ID = os.environ["INSTAGRAM_ACCOUNT_ID"]
 # RSS ఫీడ్స్ లిస్ట్
 RSS_FEEDS = [
     "https://www.123telugu.com/feed",
-    "https://www.gulte.com/feed"
+    "https://www.gulte.com/feed",
+    "https://www.greatandhra.com/feed",
+    "https://www.telugu360.com/feed",
 ]
 
 POSTED_FILE = "posted_news.txt"
-
-# డిఫాల్ట్ ఇమేజ్ (ఫీడ్‌లో ఇమేజ్ దొరక్కపోతే ఇది వాడుతుంది)
-DEFAULT_IMAGE_URL = (
+FALLBACK_IMAGE = (
     "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba"
     "?auto=format&fit=crop&w=1200&q=80"
 )
 
 
 def load_posted():
-    """ఇంతకుముందు పోస్ట్ చేసిన లింకులను లోడ్ చేస్తుంది"""
+    """ఇప్పటికే పోస్ట్ చేసిన లింకులను లోడ్ చేస్తుంది."""
     try:
         with open(POSTED_FILE, "r", encoding="utf-8") as f:
             return set(line.strip() for line in f if line.strip())
@@ -33,149 +33,169 @@ def load_posted():
 
 
 def save_posted(link):
-    """పోస్ట్ చేసిన లింక్‌ను ఫైల్‌లో సేవ్ చేస్తుంది"""
+    """పోస్ట్ చేసిన లింకును ఫైల్‌లో సేవ్ చేస్తుంది."""
     with open(POSTED_FILE, "a", encoding="utf-8") as f:
         f.write(link + "\n")
 
 
-def clean_html(raw_html):
-    """సమ్మరీలో ఉండే HTML ట్యాగ్‌లను క్లీన్ చేయడానికి"""
-    if not raw_html:
-        return ""
-    clean_text = re.sub(r'<.*?>', '', raw_html)
-    return clean_text.strip()
+def score_news(title):
+    """కీవర్డ్స్ ఆధారంగా వార్తకు స్కోర్ ఇస్తుంది."""
+    title = title.lower()
+    score = 0
+
+    keywords = {
+        "prabhas": 25,
+        "allu arjun": 25,
+        "ntr": 25,
+        "mahesh": 25,
+        "pawan": 25,
+        "rajamouli": 25,
+        "teaser": 20,
+        "trailer": 20,
+        "first look": 20,
+        "box office": 20,
+        "record": 20,
+        "release date": 15,
+        "pan india": 15,
+        "blockbuster": 15,
+    }
+
+    for word, points in keywords.items():
+        if word in title:
+            score += points
+
+    return score
 
 
-def extract_image(item):
-    """ఆర్టికల్ నుండి ఇమేజ్ URLని వెతికి పట్టుకుంటుంది (Best Approach)"""
-    
-    # 1. మీరు చెప్పినట్టు media_content లో ఉందేమో చూస్తుంది
-    if "media_content" in item and len(item.media_content) > 0:
-        if "url" in item.media_content[0]:
-            return item.media_content[0]["url"]
+def get_article_image(url):
+    """ఆర్టికల్ నుండి og:image లేదా twitter:image లను సేకరిస్తుంది."""
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        r = requests.get(url, headers=headers, timeout=20)
+        html = r.text
 
-    # 2. ఒకవేళ ఫీడ్స్ ఎన్‌క్లోజర్స్‌లో ఇమేజ్ ఉంటే (కొన్ని సైట్లలో ఇలా ఉంటుంది)
-    if "enclosures" in item and len(item.enclosures) > 0:
-        for enc in item.enclosures:
-            if enc.get("type", "").startswith("image/"):
-                return enc.get("href")
+        patterns = [
+            r'<meta property="og:image" content="([^"]+)"',
+            r'<meta name="twitter:image" content="([^"]+)"',
+            r"<meta property=\"og:image\" content='([^']+)'",
+            r"<meta name=\"twitter:image\" content='([^']+)'",
+        ]
 
-    # 3. ఒకవేళ ఆర్టికల్ లింక్స్ లో ఇమేజ్ ఉంటే
-    if "links" in item:
-        for link in item.links:
-            if link.get("type", "").startswith("image/"):
-                return link.get("href")
+        for pattern in patterns:
+            match = re.search(pattern, html)
+            if match:
+                return match.group(1)
 
-    # 4. ఒకవేళ సమ్మరీ/డిస్క్రిప్షన్ లోపల <img src="..."> ట్యాగ్ ఉంటే దాన్ని లాగుతుంది
-    summary = getattr(item, "summary", "")
-    img_match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', summary)
-    if img_match:
-        return img_match.group(1)
+    except Exception as e:
+        print("Image fetch error:", e)
 
-    return None
+    return FALLBACK_IMAGE
 
 
-def latest_news():
-    """ఫీడ్ నుండి సరికొత్త వార్తను మరియు దాని ఇమేజ్‌ను తీసుకుంటుంది"""
+def get_best_news():
+    """ఫీడ్స్ నుండి అత్యధిక స్కోర్ ఉన్న సరికొత్త వార్తను ఎంపిక చేస్తుంది."""
     posted = load_posted()
+    articles = []
 
     for feed_url in RSS_FEEDS:
         try:
             feed = feedparser.parse(feed_url)
-
             for item in feed.entries:
                 link = getattr(item, "link", "")
 
-                if not link:
+                if not link or link in posted:
                     continue
 
-                if link in posted:
-                    continue
+                title = getattr(item, "title", "")
+                summary = getattr(item, "summary", "")
 
-                # ఇమేజ్ ఉందో లేదో చెక్ చేస్తుంది
-                image_url = extract_image(item)
-                
-                # ఇమేజ్ దొరక్కపోతే డిఫాల్ట్ ఇమేజ్ సెట్ చేస్తుంది
-                if not image_url:
-                    image_url = DEFAULT_IMAGE_URL
-
-                raw_summary = getattr(item, "summary", "")
-                
-                return {
-                    "title": getattr(item, "title", ""),
-                    "summary": clean_html(raw_summary),
-                    "link": link,
-                    "image_url": image_url
-                }
-
+                articles.append(
+                    {
+                        "title": title,
+                        "summary": summary,
+                        "link": link,
+                        "score": score_news(title),
+                    }
+                )
         except Exception as e:
-            print(f"Feed Error ({feed_url}):", str(e))
+            print("Feed Error:", e)
 
-    return None
+    if not articles:
+        return None
+
+    # స్కోర్ ఆధారంగా డిసెండింగ్ ఆర్డర్‌లో సార్ట్ చేస్తుంది
+    articles.sort(key=lambda x: x["score"], reverse=True)
+    return articles[0]
 
 
-# మెయిన్ ప్రోగ్రామ్ రన్ చేయడం
-news = latest_news()
+# --- ప్రధాన ప్రక్రియ (Main Execution) ---
+
+news = get_best_news()
 
 if not news:
-    print("కొత్త Tollywood వార్తలు ఏమీ దొరకలేదు.")
+    print("No new news available.")
     raise SystemExit(0)
 
-# ఇన్‌స్టాగ్రామ్ క్యాప్షన్ ఫార్మాట్
+image_url = get_article_image(news["link"])
+
+print("Selected News:", news["title"])
+print("Image:", image_url)
+
+# ఇన్‌స్టాగ్రామ్ క్యాప్షన్ ఫార్మాటింగ్
+clean_summary = re.sub("<.*?>", "", news["summary"])[:350]
 caption = f"""
+🔥 TRENDING TOLLYWOOD UPDATE
+
 🎬 {news['title']}
 
-{news['summary'][:400]}...
+{clean_summary}
 
-What do you think about this update?
+👇 What do you think?
 
-Follow for daily Tollywood movie news.
+Follow for daily Tollywood updates.
 
-#Tollywood #TeluguCinema #MovieNews #TeluguMovies #TollywoodUpdates
-#CinemaNews #MovieUpdate #TeluguFilmIndustry #MovieBuzz #FilmNews
-#Entertainment #SouthCinema #TollywoodFans #LatestNews #Trending
+#Tollywood #TeluguCinema #MovieNews #TeluguMovies #Prabhas
+#NTR #AlluArjun #MaheshBabu #PawanKalyan #MovieUpdate
+#CinemaNews #TollywoodUpdates #FilmNews #Entertainment #Trending
 """
 
-print("Posting to Instagram:")
-print("Title:", news["title"])
-print("Image URL:", news["image_url"])
-
-# 1. మీడియా కంటైనర్ క్రియేట్ చేయడం (ఆర్టికల్ ఇమేజ్‌తో)
-container = requests.post(
-    f"https://graph.facebook.com/v25.0/{INSTAGRAM_ACCOUNT_ID}/media",
+# 1. ఇన్‌స్టాగ్రామ్ మీడియా కంటైనర్ క్రియేషన్
+container_url = f"https://graph.facebook.com/v25.0/{INSTAGRAM_ACCOUNT_ID}/media"
+container_response = requests.post(
+    container_url,
     data={
-        "image_url": news["image_url"],
+        "image_url": image_url,
         "caption": caption,
-        "access_token": META_ACCESS_TOKEN
-    }
+        "access_token": META_ACCESS_TOKEN,
+    },
 )
 
-container_json = container.json()
-print("Container Response:", container_json)
+container = container_response.json()
+print("Container Response:", container)
 
-if "id" not in container_json:
-    raise Exception(f"Container creation failed: {container_json}")
+if "id" not in container:
+    raise Exception(f"Container creation failed: {container}")
 
-creation_id = container_json["id"]
+creation_id = container["id"]
 
-# ఫేస్‌బుక్ సర్వర్ ఇమేజ్ డౌన్‌లోడ్ చేసి ప్రాసెస్ చేయడానికి 15 సెకన్లు ఆగడం
+# ఫేస్‌బుక్ సర్వర్లలో ఇమేజ్ ప్రాసెస్ అవ్వడానికి కాస్త సమయం ఇస్తున్నాము
 print("Waiting 15 seconds...")
 time.sleep(15)
 
-# 2. కంటైనర్‌ను పబ్లిష్ చేయడం
-publish = requests.post(
-    f"https://graph.facebook.com/v25.0/{INSTAGRAM_ACCOUNT_ID}/media_publish",
-    data={
-        "creation_id": creation_id,
-        "access_token": META_ACCESS_TOKEN
-    }
+# 2. కంటైనర్‌ను ఇన్‌స్టాగ్రామ్‌లో పబ్లిష్ చేయడం
+publish_url = (
+    f"https://graph.facebook.com/v25.0/{INSTAGRAM_ACCOUNT_ID}/media_publish"
+)
+publish_response = requests.post(
+    publish_url,
+    data={"creation_id": creation_id, "access_token": META_ACCESS_TOKEN},
 )
 
-publish_json = publish.json()
-print("Publish Response:", publish_json)
+publish = publish_response.json()
+print("Publish Response:", publish)
 
-if "id" in publish_json:
+if "id" in publish:
     save_posted(news["link"])
-    print("SUCCESS: పోస్ట్ విజయవంతంగా అప్‌లోడ్ అయ్యింది!")
+    print("SUCCESS")
 else:
-    raise Exception(f"Publish failed: {publish_json}")
+    raise Exception(f"Publish failed: {publish}")
