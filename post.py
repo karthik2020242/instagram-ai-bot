@@ -16,11 +16,11 @@ RSS_FEEDS = [
 
 POSTED_FILE = "posted_news.txt"
 
-# బ్యాక్‌గ్రౌండ్ ఇమేజ్ URL
-image_url = None
-
-if "media_content" in item:
-    image_url = item.media_content[0]["url"]
+# డిఫాల్ట్ ఇమేజ్ (ఫీడ్‌లో ఇమేజ్ దొరక్కపోతే ఇది వాడుతుంది)
+DEFAULT_IMAGE_URL = (
+    "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba"
+    "?auto=format&fit=crop&w=1200&q=80"
+)
 
 
 def load_posted():
@@ -40,12 +40,43 @@ def save_posted(link):
 
 def clean_html(raw_html):
     """సమ్మరీలో ఉండే HTML ట్యాగ్‌లను క్లీన్ చేయడానికి"""
+    if not raw_html:
+        return ""
     clean_text = re.sub(r'<.*?>', '', raw_html)
-    return clean_text
+    return clean_text.strip()
+
+
+def extract_image(item):
+    """ఆర్టికల్ నుండి ఇమేజ్ URLని వెతికి పట్టుకుంటుంది (Best Approach)"""
+    
+    # 1. మీరు చెప్పినట్టు media_content లో ఉందేమో చూస్తుంది
+    if "media_content" in item and len(item.media_content) > 0:
+        if "url" in item.media_content[0]:
+            return item.media_content[0]["url"]
+
+    # 2. ఒకవేళ ఫీడ్స్ ఎన్‌క్లోజర్స్‌లో ఇమేజ్ ఉంటే (కొన్ని సైట్లలో ఇలా ఉంటుంది)
+    if "enclosures" in item and len(item.enclosures) > 0:
+        for enc in item.enclosures:
+            if enc.get("type", "").startswith("image/"):
+                return enc.get("href")
+
+    # 3. ఒకవేళ ఆర్టికల్ లింక్స్ లో ఇమేజ్ ఉంటే
+    if "links" in item:
+        for link in item.links:
+            if link.get("type", "").startswith("image/"):
+                return link.get("href")
+
+    # 4. ఒకవేళ సమ్మరీ/డిస్క్రిప్షన్ లోపల <img src="..."> ట్యాగ్ ఉంటే దాన్ని లాగుతుంది
+    summary = getattr(item, "summary", "")
+    img_match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', summary)
+    if img_match:
+        return img_match.group(1)
+
+    return None
 
 
 def latest_news():
-    """ఫీడ్ నుండి సరికొత్త వార్తను తీసుకుంటుంది"""
+    """ఫీడ్ నుండి సరికొత్త వార్తను మరియు దాని ఇమేజ్‌ను తీసుకుంటుంది"""
     posted = load_posted()
 
     for feed_url in RSS_FEEDS:
@@ -61,16 +92,24 @@ def latest_news():
                 if link in posted:
                     continue
 
-                # కొత్త వార్త దొరికిన వెంటనే రిటర్న్ చేస్తుంది
+                # ఇమేజ్ ఉందో లేదో చెక్ చేస్తుంది
+                image_url = extract_image(item)
+                
+                # ఇమేజ్ దొరక్కపోతే డిఫాల్ట్ ఇమేజ్ సెట్ చేస్తుంది
+                if not image_url:
+                    image_url = DEFAULT_IMAGE_URL
+
                 raw_summary = getattr(item, "summary", "")
+                
                 return {
                     "title": getattr(item, "title", ""),
                     "summary": clean_html(raw_summary),
-                    "link": link
+                    "link": link,
+                    "image_url": image_url
                 }
 
         except Exception as e:
-            print("Feed Error:", str(e))
+            print(f"Feed Error ({feed_url}):", str(e))
 
     return None
 
@@ -98,13 +137,14 @@ Follow for daily Tollywood movie news.
 """
 
 print("Posting to Instagram:")
-print(news["title"])
+print("Title:", news["title"])
+print("Image URL:", news["image_url"])
 
-# 1. మీడియా కంటైనర్ క్రియేట్ చేయడం
+# 1. మీడియా కంటైనర్ క్రియేట్ చేయడం (ఆర్టికల్ ఇమేజ్‌తో)
 container = requests.post(
     f"https://graph.facebook.com/v25.0/{INSTAGRAM_ACCOUNT_ID}/media",
     data={
-        "image_url": IMAGE_URL,
+        "image_url": news["image_url"],
         "caption": caption,
         "access_token": META_ACCESS_TOKEN
     }
@@ -118,7 +158,7 @@ if "id" not in container_json:
 
 creation_id = container_json["id"]
 
-# ఫేస్‌బుక్ సర్వర్ ఇమేజ్ ప్రాసెస్ చేయడానికి 15 సెకన్లు ఆగడం
+# ఫేస్‌బుక్ సర్వర్ ఇమేజ్ డౌన్‌లోడ్ చేసి ప్రాసెస్ చేయడానికి 15 సెకన్లు ఆగడం
 print("Waiting 15 seconds...")
 time.sleep(15)
 
